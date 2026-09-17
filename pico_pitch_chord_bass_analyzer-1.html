@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Pico Pitch / Chord / Bass Line Analyzer — компактный музыкальный анализатор на Raspberry Pi Pico.">
+<title>Pico Pitch / Chord / Bass Line Analyzer</title>
+<style>
+:root {
+  --bg: #080b10;
+  --panel: #10151d;
+  --panel-2: #141b25;
+  --text: #e9eef5;
+  --muted: #9aa8b8;
+  --line: #263140;
+  --accent: #65d9ff;
+  --accent-2: #a78bfa;
+  --green: #62e6a7;
+  --warning: #ffd166;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 80% 0%, rgba(101,217,255,.10), transparent 30rem),
+    radial-gradient(circle at 10% 20%, rgba(167,139,250,.08), transparent 25rem),
+    var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  line-height: 1.65;
+}
+a { color: var(--accent); }
+.container { width: min(1080px, calc(100% - 32px)); margin: auto; }
+header {
+  min-height: 70vh;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 80px 0;
+}
+.badge {
+  display: inline-block;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255,255,255,.025);
+  font-size: .85rem;
+}
+h1 {
+  font-size: clamp(2.5rem, 7vw, 5.5rem);
+  line-height: 1;
+  margin: 22px 0;
+  letter-spacing: -0.055em;
+}
+.gradient {
+  background: linear-gradient(100deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.lead {
+  max-width: 780px;
+  margin: auto;
+  color: var(--muted);
+  font-size: clamp(1rem, 2vw, 1.25rem);
+}
+.buttons { margin-top: 30px; display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.button {
+  display: inline-block;
+  padding: 11px 17px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  text-decoration: none;
+  background: var(--panel);
+}
+.button.primary { border-color: rgba(101,217,255,.45); color: var(--text); }
+section { padding: 55px 0; }
+h2 { font-size: 2rem; margin: 0 0 22px; }
+h3 { margin-top: 0; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.card {
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 22px;
+}
+.card p { color: var(--muted); margin-bottom: 0; }
+.mode {
+  min-height: 170px;
+}
+.mode strong { color: var(--accent); font-size: 1.1rem; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+th, td { padding: 13px 15px; border-bottom: 1px solid var(--line); text-align: left; }
+th { color: var(--accent); }
+tr:last-child td { border-bottom: 0; }
+pre {
+  overflow-x: auto;
+  background: #05070a;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  color: #cbd5e1;
+}
+.note {
+  border-left: 3px solid var(--warning);
+  background: rgba(255,209,102,.06);
+  padding: 14px 18px;
+  color: var(--muted);
+}
+.flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 25px;
+}
+.flow span {
+  padding: 9px 13px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.arrow { color: var(--accent); }
+footer {
+  border-top: 1px solid var(--line);
+  padding: 35px 0 55px;
+  color: var(--muted);
+}
+.small { color: var(--muted); font-size: .92rem; }
+@media (max-width: 760px) {
+  .grid { grid-template-columns: 1fr; }
+  header { min-height: auto; padding: 70px 0 55px; }
+  section { padding: 40px 0; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <span class="badge">Raspberry Pi Pico · RP2040 · MAX7219 · FFT</span>
+    <h1><span class="gradient">Pico Pitch / Chord /<br>Bass Line Analyzer</span></h1>
+    <p class="lead">
+      Компактный анализатор аудиосигнала для определения высоты ноты,
+      анализа басовой линии, распознавания трезвучий и аккордов,
+      частотного анализа и настройки музыкальных инструментов.
+    </p>
+    <div class="buttons">
+      <a class="button primary" href="https://github.com/sinitsinmike/Pico-chord-analyzer">GitHub</a>
+      <a class="button" href="#modes">Режимы работы</a>
+      <a class="button" href="#hardware">Аппаратная часть</a>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+<section>
+  <h2>Что это?</h2>
+  <p>
+    Это не гармонизатор в классическом смысле. Прибор анализирует уже существующий
+    аудиосигнал и пытается определить содержащуюся в нём музыкальную информацию.
+    Основная идея проекта — объединить Pitch, Chord и Bass Line анализатор
+    в компактном устройстве на Raspberry Pi Pico.
+  </p>
+  <div class="flow">
+    <span>Аудиосигнал</span><i class="arrow">→</i>
+    <span>ADC</span><i class="arrow">→</i>
+    <span>FFT</span><i class="arrow">→</i>
+    <span>Анализ частот</span><i class="arrow">→</i>
+    <span>Ноты / Аккорды</span><i class="arrow">→</i>
+    <span>MAX7219</span>
+  </div>
+</section>
+
+<section id="modes">
+  <h2>Режимы</h2>
+  <div class="grid">
+    <article class="card mode"><strong>Pitch</strong><h3>Высота звука</h3><p>Определение основной частоты и соответствующей музыкальной ноты.</p></article>
+    <article class="card mode"><strong>Piano</strong><h3>Фортепианный диапазон</h3><p>Сопоставление обнаруженной частоты с нотами фортепианной клавиатуры.</p></article>
+    <article class="card mode"><strong>Bass</strong><h3>Басовый анализ</h3><p>Анализ низкочастотного диапазона и басовых нот/линии.</p></article>
+    <article class="card mode"><strong>Triad</strong><h3>Трезвучия</h3><p>Поиск комбинаций из трёх нот и их сопоставление с типами трезвучий.</p></article>
+    <article class="card mode"><strong>Chord</strong><h3>Аккорды</h3><p>Анализ нескольких одновременно звучащих нот и распознавание аккордов.</p></article>
+    <article class="card mode"><strong>Osc</strong><h3>Визуальный анализ</h3><p>Режим визуального отображения характеристик входного сигнала/спектра.</p></article>
+    <article class="card mode"><strong>Tuner</strong><h3>Тюнер</h3><p>Использование определённой частоты для настройки музыкального инструмента.</p></article>
+  </div>
+</section>
+
+<section id="hardware">
+  <h2>Аппаратная часть</h2>
+  <div class="grid">
+    <div class="card"><h3>Raspberry Pi Pico</h3><p>RP2040, два ядра ARM Cortex-M0+, проект рассчитан на частоту 200 MHz.</p></div>
+    <div class="card"><h3>MAX7219</h3><p>Светодиодная матрица используется для отображения режимов, нот и результатов анализа.</p></div>
+    <div class="card"><h3>ADC + FFT</h3><p>Встроенный ADC получает аудиосигнал, а arduinoFFT используется для спектрального анализа.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Подключение MAX7219</h2>
+  <table>
+    <thead><tr><th>MAX7219</th><th>Raspberry Pi Pico</th></tr></thead>
+    <tbody>
+      <tr><td>VCC</td><td>+5V</td></tr>
+      <tr><td>GND</td><td>GND</td></tr>
+      <tr><td>DIN</td><td>SPI MOSI</td></tr>
+      <tr><td>CLK</td><td>SPI SCK</td></tr>
+      <tr><td>CS / LOAD</td><td>GPIO, указанный в программе</td></tr>
+    </tbody>
+  </table>
+  <p class="small">
+    В текущей конструкции матрица питается от +5V и GND Raspberry Pi Pico.
+    Конкретные GPIO для SPI и CS зависят от используемой версии исходного кода.
+  </p>
+</section>
+
+<section>
+  <h2>Аудиовход</h2>
+  <div class="note">
+    Перед подключением аудио к ADC необходимо проверить уровень сигнала.
+    Нельзя подавать неизвестный источник непосредственно на ADC, если его напряжение
+    может выйти за допустимый диапазон RP2040. Для переменного аудиосигнала обычно
+    требуется соответствующее смещение относительно середины диапазона ADC.
+  </div>
+</section>
+
+<section>
+  <h2>Как работает анализ</h2>
+  <p>
+    Сигнал поступает на ADC, накапливается в буфере и обрабатывается цифровыми
+    алгоритмами. FFT переводит сигнал из временной области в частотную.
+    По спектру программа определяет основные частоты и сопоставляет их
+    с музыкальными нотами. Набор найденных нот используется для анализа
+    трезвучий и аккордов.
+  </p>
+  <pre>Аудио
+  │
+  ▼
+ ADC
+  │
+  ▼
+ Буфер
+  │
+  ▼
+ FFT
+  │
+  ▼
+ Спектр
+  ├──► Pitch
+  ├──► Piano
+  ├──► Bass
+  └──► Ноты ──► Triad / Chord
+                  │
+                  ▼
+               MAX7219</pre>
+</section>
+
+<section>
+  <h2>Установка</h2>
+  <ol>
+    <li>Установить Arduino IDE.</li>
+    <li>Установить поддержку Raspberry Pi Pico / RP2040.</li>
+    <li>Установить библиотеки <code>MD_MAX72XX</code> и <code>arduinoFFT</code>.</li>
+    <li>Открыть файл проекта <code>.ino</code>.</li>
+    <li>Выбрать плату <b>Raspberry Pi Pico</b>.</li>
+    <li>Проверить GPIO аудиовхода, кнопки и MAX7219.</li>
+    <li>Скомпилировать и загрузить прошивку.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Управление</h2>
+  <pre>Pitch → Piano → Bass → Triad → Chord → Osc → Tuner → Pitch</pre>
+  <p>
+    При переключении режима его название кратковременно отображается на матрице.
+  </p>
+</section>
+
+<section>
+  <h2>Используемые библиотеки</h2>
+  <div class="grid">
+    <div class="card"><h3>MD_MAX72XX</h3><p>Управление LED-матрицей MAX7219 через SPI.</p></div>
+    <div class="card"><h3>SPI</h3><p>Последовательный интерфейс, используемый для связи с MAX7219.</p></div>
+    <div class="card"><h3>arduinoFFT</h3><p>Быстрое преобразование Фурье для частотного анализа аудиосигнала.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Предупреждения компиляции</h2>
+  <p>
+    Сообщение <code>INFO: ARDUINO SPI interface selected.</code> от MD_MAX72XX
+    является информационным предупреждением о выбранном SPI-интерфейсе и не
+    является ошибкой.
+  </p>
+  <p>
+    Предупреждение <code>ISO C++ forbids converting a string constant to 'char*'</code>
+    возникает, когда строковый литерал передаётся функции с параметром
+    <code>char*</code>. Корректная сигнатура для таких строк:
+  </p>
+  <pre>void flash_message(const char *message);</pre>
+</section>
+
+<section>
+  <h2>Ограничения</h2>
+  <p>
+    Точность определения нот и аккордов зависит от качества сигнала, шума,
+    обертонов, уровня входного сигнала, частоты дискретизации, размера FFT,
+    тембра инструмента и количества одновременно звучащих источников.
+  </p>
+</section>
+
+<section>
+  <h2>Возможное развитие</h2>
+  <div class="grid">
+    <div class="card"><p>Более точное определение Pitch.</p></div>
+    <div class="card"><p>Улучшение распознавания аккордов.</p></div>
+    <div class="card"><p>Подавление шума и автоматический контроль уровня.</p></div>
+    <div class="card"><p>Отображение частоты в Hz.</p></div>
+    <div class="card"><p>Отображение отклонения от ноты в центах.</p></div>
+    <div class="card"><p>Расширение базы аккордов и поддержка разных строев.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Исходный код</h2>
+  <p>
+    <a href="https://github.com/sinitsinmike/Pico-chord-analyzer">
+      github.com/sinitsinmike/Pico-chord-analyzer
+    </a>
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <strong>Pico Pitch / Chord / Bass Line Analyzer</strong>
+    <p>Автор: Михаил Синицын · <a href="mailto:sinitsinmike@yahoo.com">sinitsinmike@yahoo.com</a></p>
+    <p class="small">Проект создан для экспериментов с цифровой обработкой аудиосигнала и музыкальным анализом на Raspberry Pi Pico.</p>
+  </div>
+</footer>
+
+</body>
+</html>
